@@ -1,5 +1,6 @@
 
 import 'package:event_app/pages/signup.dart';
+import 'package:event_app/pages/splash_screen.dart';
 import 'package:event_app/services/data.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -21,7 +22,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: "Event Management App",
       debugShowCheckedModeBanner: false,
-      home:Signup(),
+      home:SplashScreen(),
     );
   }
 }
