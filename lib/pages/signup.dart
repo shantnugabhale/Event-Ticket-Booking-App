@@ -1,5 +1,4 @@
-import 'package:event_app/admin/signup_admin.dart';
-import 'package:event_app/pages/home_screen.dart';
+import 'package:event_app/admin/signup_admin.dart'; 
 import 'package:event_app/services/auth.dart';
 import 'package:flutter/material.dart';
 

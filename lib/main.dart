@@ -1,5 +1,4 @@
-
-import 'package:event_app/pages/signup.dart';
+ 
 import 'package:event_app/pages/splash_screen.dart';
 import 'package:event_app/services/data.dart';
 import 'package:flutter/material.dart';
