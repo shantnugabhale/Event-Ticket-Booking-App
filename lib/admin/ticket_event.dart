@@ -3,6 +3,9 @@ import 'package:event_app/services/database.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+// Enum to manage filter states
+enum FilterOption { All, Today, Week, Month }
+
 class TicketEvent extends StatefulWidget {
   const TicketEvent({super.key});
 
@@ -12,239 +15,318 @@ class TicketEvent extends StatefulWidget {
 
 class _TicketEventState extends State<TicketEvent> {
   Stream? ticketStream;
-
-  ontheload() async {
-    ticketStream = await DatabaseMethods().getTickets();
-    setState(() {});
-  }
+  FilterOption _selectedFilter = FilterOption.All;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
-    // TODO: implement initState
-    ontheload();
     super.initState();
+    // **FIX**: Assign the stream directly without async/await.
+    ticketStream = DatabaseMethods().getTickets();
+    // Re-filter the list whenever the search text changes
+    _searchController.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Applies date and search filters to the list of all tickets.
+  List<DocumentSnapshot> _applyFilters(List<DocumentSnapshot> allTickets) {
+    List<DocumentSnapshot> filteredList = List.from(allTickets);
+    final now = DateTime.now();
+
+    // 1. Apply Date Filter based on the selected chip
+    if (_selectedFilter != FilterOption.All) {
+      filteredList = filteredList.where((ticket) {
+        final docDate = DateTime.parse(ticket['Date']);
+        switch (_selectedFilter) {
+          case FilterOption.Today:
+            return docDate.year == now.year &&
+                docDate.month == now.month &&
+                docDate.day == now.day;
+          case FilterOption.Week:
+            final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+            final endOfWeek = startOfWeek.add(Duration(days: 7));
+            return docDate.isAfter(startOfWeek.subtract(Duration(days: 1))) &&
+                docDate.isBefore(endOfWeek);
+          case FilterOption.Month:
+            return docDate.year == now.year && docDate.month == now.month;
+          default:
+            return true;
+        }
+      }).toList();
+    }
+
+    // 2. Apply Search Filter based on the text input
+    final query = _searchController.text.toLowerCase();
+    if (query.isNotEmpty) {
+      filteredList = filteredList.where((ticket) {
+        final eventName = (ticket['Event'] as String? ?? '').toLowerCase();
+        return eventName.contains(query);
+      }).toList();
+    }
+
+    return filteredList;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Event Tickets"),
+        backgroundColor: Color(0xffe3e6ff),
+        elevation: 0,
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xffe3e6ff), Color(0xfff1f3ff), Colors.white],
+          ),
+        ),
+        child: Column(
+          children: [
+            // Search Bar UI
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search by event name...',
+                  prefixIcon: Icon(Icons.search),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30.0),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            // Filter Chips UI
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildFilterChip(FilterOption.All, "All"),
+                    _buildFilterChip(FilterOption.Today, "Today"),
+                    _buildFilterChip(FilterOption.Week, "This Week"),
+                    _buildFilterChip(FilterOption.Month, "This Month"),
+                  ],
+                ),
+              ),
+            ),
+            // Ticket List UI
+            Expanded(child: allTickets()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(FilterOption option, String label) {
+    bool isSelected = _selectedFilter == option;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: FilterChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (selected) {
+          setState(() {
+            _selectedFilter = option;
+          });
+        },
+        selectedColor: Colors.blueAccent.withOpacity(0.8),
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.white : Colors.black,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+        backgroundColor: Colors.white,
+        checkmarkColor: Colors.white,
+      ),
+    );
   }
 
   Widget allTickets() {
     return StreamBuilder(
       stream: ticketStream,
       builder: (context, AsyncSnapshot snapshot) {
-        return snapshot.hasData
-            ? ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: snapshot.data.docs.length,
-                itemBuilder: (context, index) {
-                  DocumentSnapshot ds = snapshot.data.docs[index];
-                  String inputDate = ds["Date"];
-                  DateTime parsedDate = DateTime.parse(inputDate);
-                  String formattedDate = DateFormat(
-                    'MMM,dd',
-                  ).format(parsedDate);
-                  DateTime currentDate = DateTime.now();
-                  bool hasPassed = currentDate.isAfter(parsedDate);
-                  return hasPassed
-                      ? Container()
-                      : Container(
-                          margin: EdgeInsets.only(
-                            left: 5,
-                            right: 20,
-                            bottom: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(
-                              color: const Color.fromARGB(73, 0, 0, 0),
-                              width: 2.0,
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Something went wrong!'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(child: Text('No tickets found.'));
+        }
+
+        final allDocs = snapshot.data!.docs as List<DocumentSnapshot>;
+        final filteredDocs = _applyFilters(allDocs);
+
+        if (filteredDocs.isEmpty) {
+          return Center(
+            child: Text(
+              'No tickets match your filter.',
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          itemCount: filteredDocs.length,
+          itemBuilder: (context, index) {
+            DocumentSnapshot ds = filteredDocs[index];
+            DateTime parsedDate = DateTime.parse(ds["Date"]);
+            
+            return Card(
+              elevation: 5,
+              margin: EdgeInsets.only(bottom: 16.0),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
+              ),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: 8,
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(12.0),
+                          bottomLeft: Radius.circular(12.0),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12.0, vertical: 10.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              ds["Event"],
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17.0,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Column(
-                            children: [
-                              SizedBox(height: 10),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(width: 20.0),
-                                  Icon(
-                                    Icons.location_on_outlined,
-                                    color: Colors.blue,
+                            SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(Icons.location_on_outlined,
+                                    color: Colors.grey.shade600, size: 16),
+                                SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    ds["Location"],
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey.shade700),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-
-                                  Expanded(
-                                    child: Text(
-                                      ds["Location"],
-                                      style: TextStyle(
-                                        color: Colors.black,
-                                        fontSize: 20.0,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      // textAlign: TextAlign.center,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                ),
+                              ],
+                            ),
+                            Spacer(),
+                            Divider(height: 12),
+                            Row(
+                              children: [
+                                // **FIX**: Added a fallback for the user image
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: Colors.grey.shade200,
+                                  backgroundImage: (ds["Image"] != null && ds["Image"].isNotEmpty)
+                                      ? NetworkImage(ds["Image"])
+                                      : null,
+                                  child: (ds["Image"] == null || ds["Image"].isEmpty)
+                                      ? Icon(Icons.person, size: 20, color: Colors.grey.shade500)
+                                      : null,
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    ds["Name"],
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  Spacer(),
-                                ],
-                              ),
-                              Divider(),
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  left: 10.0,
-                                  bottom: 10.0,
                                 ),
-                                child: Row(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius:
-                                          BorderRadiusGeometry.circular(20),
-                                      child: Image.network(
-                                        ds["Image"],
-                                        height: 120,
-                                        width: 120,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-
-                                    SizedBox(width: 10.0),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            ds["Event"],
-                                            style: TextStyle(
-                                              color: Colors.black,
-                                              fontSize: 14.0,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                            maxLines: 2,
-                                          ),
-                                          SizedBox(height: 5.0),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.calendar_month,
-                                                color: Colors.blue,
-                                              ),
-                                              SizedBox(width: 5.0),
-                                              Expanded(
-                                                child: Text(
-                                                  ds["Date"],
-                                                  style: TextStyle(
-                                                    color: Colors.black,
-                                                    fontSize: 14.0,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.person,
-                                                color: Colors.blue,
-                                              ),
-                                              SizedBox(width: 5.0),
-                                              Expanded(
-                                                child: Text(
-                                                  ds["Name"],
-                                                  style: TextStyle(
-                                                    color: Colors.black,
-                                                    fontSize: 14.0,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.group,
-                                                color: Colors.blue,
-                                              ),
-                                              SizedBox(width: 5.0),
-                                              Text(
-                                                ds["Number"],
-                                                style: TextStyle(
-                                                  color: Colors.black,
-                                                  fontSize: 14.0,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                              SizedBox(width: 10.0),
-                                              Icon(
-                                                Icons.monetization_on,
-                                                color: Colors.blue,
-                                              ),
-                                              SizedBox(width: 5.0),
-                                              Expanded(
-                                                child: Text(
-                                                  "\$" + ds["Total"],
-                                                  style: TextStyle(
-                                                    color: Colors.black,
-                                                    fontSize: 14.0,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                },
-              )
-            : Container();
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 110,
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 10.0, vertical: 10.0),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(12.0),
+                          bottomRight: Radius.circular(12.0),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildStatRow(Icons.calendar_today,
+                              DateFormat('MMM dd').format(parsedDate)),
+                          SizedBox(height: 8),
+                          _buildStatRow(
+                              Icons.group, "${ds["Number"]} Tickets"),
+                          SizedBox(height: 8),
+                          _buildStatRow(Icons.monetization_on,
+                              "\$${ds["Total"]}",
+                              color: Colors.green.shade700),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+              ),
+            );
+          },
+        );
       },
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        margin: EdgeInsets.only(left: 20.0, top: 40.0),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Icon(Icons.arrow_back_ios_new_outlined),
-                Spacer(),
-                SizedBox(
-                  // width: MediaQuery.of(context).size.width / 5.5,
-                ),
-                Text(
-                  "Event Tickets",
-                  style: TextStyle(
-                    color: const Color.fromARGB(255, 7, 119, 232),
-                    fontSize: 28.0,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Spacer(),
-              ],
-            ),
-            SizedBox(height: 20.0),
-            allTickets(),
-          ],
+  Widget _buildStatRow(IconData icon, String text, {Color? color}) {
+    return Row(
+      children: [
+        Icon(icon, color: color ?? Colors.grey.shade700, size: 16),
+        SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: color ?? Colors.black87,
+                fontSize: 14),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
-      ),
+      ],
     );
   }
 }
+
