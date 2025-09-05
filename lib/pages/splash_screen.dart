@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:event_app/pages/bottomnav.dart';
 import 'package:event_app/pages/signup.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
- 
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -10,57 +12,60 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _iconScaleAnimation;
-  late Animation<Offset> _textSlideAnimation;
-  late Animation<double> _textFadeAnimation;
+    with TickerProviderStateMixin {
+  late AnimationController _revealController;
+  late Animation<double> _slideAnimation;
+  late Animation<double> _contentFadeAnimation;
+  bool _showContent = false;
 
   @override
   void initState() {
     super.initState();
 
-    // Setup animation controller
-    _animationController = AnimationController(
+    _revealController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2), // Total animation duration
+      duration: const Duration(milliseconds: 1500),
     );
 
-    // Animation for the icon to scale up with a bounce effect
-    _iconScaleAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.0, 0.6, curve: Curves.elasticOut), // Animate in the first 60% of the duration
+    _slideAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _revealController, curve: Curves.easeInOutCubic),
     );
 
-    // Animation for the text to slide up from below
-    _textSlideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.5),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.5, 1.0, curve: Curves.easeOut), // Animate in the last 50% of the duration
-    ));
-    
-    // Animation for the text to fade in
-    _textFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(
-            parent: _animationController,
-            curve: const Interval(0.5, 1.0, curve: Curves.easeIn)));
+    _contentFadeAnimation = CurvedAnimation(
+      parent: _revealController,
+      curve: const Interval(0.4, 1.0, curve: Curves.easeIn),
+    );
 
-    // Start the animation
-    _animationController.forward();
+    _checkUserAndNavigate();
+  }
 
-    // Timer to navigate to the Signup page after 3 seconds
-    Timer(const Duration(seconds: 3), () {
+  /// **IMPROVEMENT**: This function now checks the Firebase auth state directly, which is more reliable.
+  void _checkUserAndNavigate() async {
+    // **LOGIC CHANGE**: Check for the current user directly from FirebaseAuth.
+    User? currentUser = FirebaseAuth.instance.currentUser;
+
+    // Start the splash screen animations
+    Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() {
+          _showContent = true;
+        });
+        _revealController.forward();
+      }
+    });
+
+    // Navigate after 4 seconds to the correct page
+    Timer(const Duration(seconds: 4), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          // Use a fade transition for a smoother navigation experience
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const Signup(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            // **LOGIC**: If currentUser is not null, go to Bottomnav, otherwise go to Signup.
+            pageBuilder: (_, __, ___) =>
+                currentUser != null ? const Bottomnav() : const Signup(),
+            transitionsBuilder: (_, animation, __, child) {
               return FadeTransition(opacity: animation, child: child);
             },
-            transitionDuration: const Duration(milliseconds: 500),
+            transitionDuration: const Duration(milliseconds: 800),
           ),
         );
       }
@@ -69,66 +74,94 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _revealController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
-      body: Container(
-        width: double.infinity,
+      body: Stack(
+        children: [
+          // The main content (icon and text) that is revealed
+          if (_showContent)
+            Center(
+              child: FadeTransition(
+                opacity: _contentFadeAnimation,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.local_activity_outlined,
+                      size: 100,
+                      color: Colors.blue.shade700,
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      "Event App",
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                        color: Color.fromARGB(255, 127, 28, 160),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    FadeTransition(
+                      opacity: CurvedAnimation(
+                          parent: _revealController,
+                          curve: const Interval(0.6, 1.0)),
+                      child: Text(
+                        "Your next experience awaits.",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // The animated curtains that slide away
+          AnimatedBuilder(
+            animation: _slideAnimation,
+            builder: (context, child) {
+              return Stack(
+                children: [
+                  // Left Curtain
+                  Transform.translate(
+                    offset: Offset(-_slideAnimation.value * screenWidth / 2, 0),
+                    child: _buildCurtain(isLeft: true),
+                  ),
+                  // Right Curtain
+                  Transform.translate(
+                    offset: Offset(_slideAnimation.value * screenWidth / 2, 0),
+                    child: _buildCurtain(isLeft: false),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper widget to build a curtain half
+  Widget _buildCurtain({required bool isLeft}) {
+    return Align(
+      alignment: isLeft ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        width: MediaQuery.of(context).size.width / 2,
+        height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xfff0f2ff), Colors.white],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // **NEW**: Animated icon instead of an image
-              ScaleTransition(
-                scale: _iconScaleAnimation,
-                child: Container(
-                  padding: const EdgeInsets.all(30),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.1),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      )
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.local_activity,
-                    size: 80,
-                    color: Colors.blue.shade700,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
-              // **NEW**: Staggered slide and fade animation for the text
-              FadeTransition(
-                opacity: _textFadeAnimation,
-                child: SlideTransition(
-                  position: _textSlideAnimation,
-                  child: const Text(
-                    "Event App",
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Color.fromARGB(255, 127, 28, 160),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            colors: [const Color(0xfff0f2ff), Colors.white],
           ),
         ),
       ),

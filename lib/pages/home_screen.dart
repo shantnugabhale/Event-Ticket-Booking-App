@@ -1,3 +1,6 @@
+// pages/home_screen.dart
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:event_app/pages/all_events.dart';
 import 'package:event_app/pages/categories_event.dart';
@@ -16,10 +19,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-// **CHANGE 1**: Added 'with AutomaticKeepAliveClientMixin<HomeScreen>'
 class _HomeScreenState extends State<HomeScreen>
     with AutomaticKeepAliveClientMixin<HomeScreen> {
-  // **CHANGE 2**: Added this override to keep the state alive
   @override
   bool get wantKeepAlive => true;
 
@@ -32,12 +33,18 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _onScreenLoad();
+    eventStream = DatabaseMethods().getallEvents();
+    _loadSecondaryData();
     _searchController.addListener(() {
       setState(() {
         _searchActive = _searchController.text.isNotEmpty;
       });
     });
+  }
+
+  void _loadSecondaryData() async {
+    await getthesharedpref();
+    await _getCurrentCity();
   }
 
   @override
@@ -46,17 +53,11 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  void _onScreenLoad() async {
-    await getthesharedpref();
-    await _getCurrentCity();
-    eventStream = DatabaseMethods().getallEvents();
+  Future<void> getthesharedpref() async {
+    name = await SharedPrefenceHelper().getUserName();
     if (mounted) {
       setState(() {});
     }
-  }
-
-  Future<void> getthesharedpref() async {
-    name = await SharedPrefenceHelper().getUserName();
   }
 
   Future<void> _getCurrentCity() async {
@@ -108,7 +109,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    // **CHANGE 3**: Added 'super.build(context);' for the mixin to work
     super.build(context);
     return Scaffold(
       body: Container(
@@ -120,6 +120,9 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         child: CustomScrollView(
+          // --- THIS IS THE CRITICAL FIX ---
+          cacheExtent: 9999,
+          // ---------------------------------
           slivers: [
             _buildHeader(),
             _buildSearchBar(),
@@ -140,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen>
       expandedHeight: 120.0,
       pinned: true,
       flexibleSpace: FlexibleSpaceBar(
-        titlePadding: EdgeInsets.only(left: 20, bottom: 10),
+        titlePadding: EdgeInsets.only(left: 20, bottom: 5),
         title: Text(
           "Find Events",
           style: TextStyle(
@@ -148,30 +151,30 @@ class _HomeScreenState extends State<HomeScreen>
         ),
         background: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20.0, 10.0, 20.0, 0),
+            padding: const EdgeInsets.fromLTRB(20.0, 5.0, 20.0, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Icon(Icons.location_on,
-                        color: Colors.blue.shade700),
-                    SizedBox(width: 4.0),
+                        color: Colors.blue.shade700 ),
+                    SizedBox(width: 1.0),
                     Text(
                       _currentCity ?? "Loading...",
                       style: TextStyle(
-                        color: Colors.grey.shade800,
+                        color: const Color.fromARGB(255, 10, 2, 2),
                         fontSize: 16.0,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
-               
+                SizedBox(height: 4.0),
                 Text(
                   "Hello, ${name ?? 'User'}",
                   style: TextStyle(
-                    color: Colors.black54,
+                    color: const Color.fromARGB(136, 178, 8, 220),
                     fontSize: 16.0,
                   ),
                 ),
@@ -346,12 +349,13 @@ class _HomeScreenState extends State<HomeScreen>
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
-                // To show only a few items on the home screen
-                if (index >= 4 && !_searchActive) return null; 
+                if (index >= 4 && !_searchActive) return null;
                 DocumentSnapshot ds = filteredDocs[index];
                 return _buildEventCard(ds);
               },
-              childCount: _searchActive ? filteredDocs.length : (filteredDocs.length > 4 ? 4 : filteredDocs.length),
+              childCount: _searchActive
+                  ? filteredDocs.length
+                                    : (filteredDocs.length > 4 ? 4 : filteredDocs.length),
             ),
           ),
         );
@@ -399,13 +403,17 @@ class _HomeScreenState extends State<HomeScreen>
                 ClipRRect(
                   borderRadius:
                       BorderRadius.vertical(top: Radius.circular(15.0)),
-                  child: Image.network(
-                    ds["Image"],
+                  child: CachedNetworkImage(
+                    imageUrl: ds["Image"],
                     height: 180,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        Image.asset(
+                    placeholder: (context, url) => Container(
+                      height: 180,
+                      width: double.infinity,
+                      color: Colors.grey[300],
+                    ),
+                    errorWidget: (context, url, error) => Image.asset(
                       "assets/images/event.jpg",
                       height: 180,
                       width: double.infinity,
@@ -497,4 +505,3 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
-

@@ -1,4 +1,5 @@
 import 'package:event_app/admin/create_subadmin.dart';
+import 'package:event_app/admin/manage_events.dart'; 
 import 'package:event_app/admin/manage_subadmins.dart';
 import 'package:event_app/admin/ticket_event.dart';
 import 'package:event_app/admin/upload_event.dart';
@@ -6,7 +7,8 @@ import 'package:event_app/pages/signup.dart';
 import 'package:flutter/material.dart';
 
 class AdminDashboard extends StatelessWidget {
-  const AdminDashboard({super.key});
+  final String docId;
+  const AdminDashboard({super.key, required this.docId});
 
   @override
   Widget build(BuildContext context) {
@@ -59,26 +61,25 @@ class AdminDashboard extends StatelessWidget {
           ),
         ),
         child: GridView.count(
-          // **CHANGE**: Set to 1 for a single-column list view
-          crossAxisCount: 1,
-          padding: EdgeInsets.all(20.0),
-          crossAxisSpacing: 15,
-          // **CHANGE**: Reduced vertical spacing between items
-          mainAxisSpacing: 12,
-          // **CHANGE**: Adjust aspect ratio to control item height in a single column
-          childAspectRatio: (1 / .35), // Width-to-height ratio; higher value = shorter item
+          crossAxisCount: 1, // A single column list
+          padding: EdgeInsets.all(20.0), // Consistent padding
+          mainAxisSpacing: 12, // Reduced vertical space between items
+          // --- FIX: Controls the height of each item ---
+          // A higher value makes the item shorter.
+          childAspectRatio: (1 / .35), 
           children: <Widget>[
             makeDashboardItem("Upload Event", Icons.upload_file, 0, context),
-            makeDashboardItem("View Tickets", Icons.airplane_ticket_outlined, 1, context),
-            makeDashboardItem("Create Subadmin", Icons.person_add_alt_1, 2, context),
-            makeDashboardItem("Manage Admins", Icons.manage_accounts, 3, context),
+            makeDashboardItem("Manage Events", Icons.edit_calendar, 1, context),
+            makeDashboardItem("View Tickets", Icons.airplane_ticket_outlined, 2, context),
+            makeDashboardItem("Create Subadmin", Icons.person_add_alt_1, 3, context),
+            makeDashboardItem("Manage Admins", Icons.manage_accounts, 4, context),
           ],
         ),
       ),
     );
   }
 
-  /// Creates a reusable and styled card widget for each dashboard item.
+  // --- FIX: Changed from a Column to a Row for a shorter, list-like item ---
   Widget makeDashboardItem(String title, IconData icon, int index, BuildContext context) {
     return Container(
       decoration: BoxDecoration(
@@ -100,33 +101,32 @@ class AdminDashboard extends StatelessWidget {
             if (index == 0) {
               Navigator.push(context, MaterialPageRoute(builder: (context) => UploadEvent()));
             } else if (index == 1) {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => TicketEvent()));
+              Navigator.push(context, MaterialPageRoute(builder: (context) => ManageEventsPage()));
             } else if (index == 2) {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => CreateSubadminPage()));
+              Navigator.push(context, MaterialPageRoute(builder: (context) => TicketEvent()));
             } else if (index == 3) {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => CreateSubadminPage()));
+            } else if (index == 4) {
               Navigator.push(context, MaterialPageRoute(builder: (context) => ManageSubadminsPage()));
             }
           },
           borderRadius: BorderRadius.circular(15.0),
-          // **CHANGE**: Using a Row for a more compact, horizontal layout inside the card
+          // Using a Row makes the item horizontal and more compact
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.start, // Align content to the left
               children: <Widget>[
                 Icon(
                   icon,
-                  // **CHANGE**: Reduced icon size
-                  size: 35.0,
+                  size: 35.0, // Slightly smaller icon
                   color: Colors.blue.shade700,
                 ),
-                // **CHANGE**: Reduced spacing between icon and text
-                SizedBox(width: 25.0),
+                SizedBox(width: 25.0), // Space between icon and text
                 Text(
                   title,
-                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 18.0,
+                    fontSize: 18.0, // Larger font for better readability
                     color: Colors.black87,
                     fontWeight: FontWeight.w600,
                   ),
@@ -139,4 +139,3 @@ class AdminDashboard extends StatelessWidget {
     );
   }
 }
-

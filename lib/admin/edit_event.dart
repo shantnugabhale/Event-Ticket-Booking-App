@@ -1,24 +1,31 @@
 import 'dart:io';
-import 'package:event_app/services/database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart'; 
 import 'package:random_string/random_string.dart';
-import 'package:intl/intl.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 
-class UploadEvent extends StatefulWidget {
-  const UploadEvent({super.key});
+class EditEventPage extends StatefulWidget {
+  final String docId;
+  final Map<String, dynamic> eventData;
+
+  const EditEventPage({
+    super.key,
+    required this.docId,
+    required this.eventData,
+  });
 
   @override
-  State<UploadEvent> createState() => _UploadEventState();
+  State<EditEventPage> createState() => _EditEventPageState();
 }
 
-class _UploadEventState extends State<UploadEvent> {
+class _EditEventPageState extends State<EditEventPage> {
   // Text editing controllers
-  final TextEditingController namecontroller = TextEditingController();
-  final TextEditingController pricecontroller = TextEditingController();
-  final TextEditingController locationcontroller = TextEditingController();
-  final TextEditingController detailcontroller = TextEditingController();
+  late TextEditingController namecontroller;
+  late TextEditingController pricecontroller;
+  late TextEditingController locationcontroller;
+  late TextEditingController detailcontroller;
   final TextEditingController _imageUrlController = TextEditingController();
 
   // State variables
@@ -26,14 +33,48 @@ class _UploadEventState extends State<UploadEvent> {
   String? value;
   final ImagePicker _picker = ImagePicker();
   File? selectedImage;
-  String? _imageUrlFromDialog;
+  String? currentImageUrl;
   bool _isLoading = false;
   DateTime? selectDate;
   TimeOfDay? selectTime;
 
   @override
+  void initState() {
+    super.initState();
+    // Pre-fill controllers and state variables with existing event data
+    namecontroller = TextEditingController(text: widget.eventData['Name']);
+    pricecontroller = TextEditingController(text: widget.eventData['Price']);
+    locationcontroller = TextEditingController(text: widget.eventData['Location']);
+    detailcontroller = TextEditingController(text: widget.eventData['Detail']);
+    value = widget.eventData['Category'];
+    currentImageUrl = widget.eventData['Image'];
+    selectDate = DateTime.parse(widget.eventData['Date']);
+    _imageUrlController.text = currentImageUrl ?? '';
+    
+    // --- FIX: Robust time parsing to handle both 12-hour and 24-hour formats ---
+    try {
+      final timeString = widget.eventData['Time'] as String;
+      // Try parsing 12-hour format first (e.g., "5:08 PM")
+      final format12 = DateFormat.jm(); 
+      final dateTime = format12.parse(timeString);
+      selectTime = TimeOfDay.fromDateTime(dateTime);
+    } catch (e) {
+      try {
+        // If that fails, try parsing 24-hour format (e.g., "17:08")
+        final timeString = widget.eventData['Time'] as String;
+        final format24 = DateFormat.Hm();
+        final dateTime = format24.parse(timeString);
+        selectTime = TimeOfDay.fromDateTime(dateTime);
+      } catch (e2) {
+        // If both fail, default to the current time as a fallback
+        print("Error parsing time string: ${widget.eventData['Time']}. Defaulting to now.");
+        selectTime = TimeOfDay.now();
+      }
+    }
+  }
+
+  @override
   void dispose() {
-    // Dispose all controllers to prevent memory leaks
     namecontroller.dispose();
     pricecontroller.dispose();
     locationcontroller.dispose();
@@ -42,21 +83,21 @@ class _UploadEventState extends State<UploadEvent> {
     super.dispose();
   }
 
-  /// Opens the gallery to pick an image.
+  /// Opens the gallery to pick a new image.
   Future<void> getImage() async {
     final image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
         selectedImage = File(image.path);
-        _imageUrlFromDialog = null; // Clear URL if an image is picked
+        currentImageUrl = null; // Clear URL if an image is picked
         _imageUrlController.clear();
       });
     }
   }
-
+  
   /// Shows a dialog to input an image URL.
   Future<void> _showImageUrlDialog() async {
-    _imageUrlController.text = _imageUrlFromDialog ?? '';
+    _imageUrlController.text = currentImageUrl ?? '';
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -81,42 +122,14 @@ class _UploadEventState extends State<UploadEvent> {
 
     if (result != null && result.isNotEmpty) {
       setState(() {
-        _imageUrlFromDialog = result;
+        currentImageUrl = result;
         selectedImage = null; // Clear selected image if URL is provided
       });
     }
   }
 
-  /// Date picker
-  Future<void> _pickDate() async {
-    final pickedDate = await showDatePicker(
-      context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2100),
-      initialDate: DateTime.now(),
-    );
-    if (pickedDate != null && pickedDate != selectDate) {
-      setState(() {
-        selectDate = pickedDate;
-      });
-    }
-  }
-
-  /// Time picker
-  Future<void> _pickTime() async {
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-    if (pickedTime != null && pickedTime != selectTime) {
-      setState(() {
-        selectTime = pickedTime;
-      });
-    }
-  }
-
-  /// Handles the complete event upload logic.
-  Future<void> uploadEventData() async {
+  /// Handles the complete event update logic.
+  Future<void> updateEventData() async {
     // --- 1. Input Validation ---
     if (namecontroller.text.isEmpty ||
         pricecontroller.text.isEmpty ||
@@ -133,8 +146,8 @@ class _UploadEventState extends State<UploadEvent> {
       );
       return;
     }
-
-    if (selectedImage == null && (_imageUrlFromDialog == null || _imageUrlFromDialog!.isEmpty)) {
+    
+    if (selectedImage == null && (currentImageUrl == null || currentImageUrl!.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.red,
@@ -148,12 +161,11 @@ class _UploadEventState extends State<UploadEvent> {
       _isLoading = true;
     });
 
-    String imageUrl = "";
+    String imageUrl = currentImageUrl ?? "";
 
     try {
-      // --- 2. Image Handling ---
+      // --- 2. Image Handling (if a new image was selected) ---
       if (selectedImage != null) {
-        // Upload image from gallery
         String addId = randomAlphaNumeric(10);
         Reference firebaseStorageRef =
             FirebaseStorage.instance.ref().child("eventImages").child(addId);
@@ -161,13 +173,11 @@ class _UploadEventState extends State<UploadEvent> {
         var downloadUrl = await (await task).ref.getDownloadURL();
         imageUrl = downloadUrl;
       } else {
-        // Use image from URL
-        imageUrl = _imageUrlFromDialog!;
+        imageUrl = currentImageUrl!;
       }
 
-      // --- 3. Data Preparation & Firestore Upload ---
-      String id = randomAlphaNumeric(10);
-      Map<String, dynamic> uploadevent = {
+      // --- 3. Data Preparation & Firestore Update ---
+      Map<String, dynamic> updatedEvent = {
         "Image": imageUrl,
         "Name": namecontroller.text,
         "Price": pricecontroller.text,
@@ -179,32 +189,24 @@ class _UploadEventState extends State<UploadEvent> {
         "Date": DateFormat('yyyy-MM-dd').format(selectDate!),
       };
 
-      await DatabaseMethods().addEvent(uploadevent, id);
+      await FirebaseFirestore.instance
+          .collection('Event')
+          .doc(widget.docId)
+          .update(updatedEvent);
 
-      // --- 4. Success Feedback & Reset ---
+      // --- 4. Success Feedback & Navigation ---
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.green,
-          content: Text('Event Uploaded Successfully'),
+          content: Text('Event Updated Successfully'),
         ),
       );
-      setState(() {
-        namecontroller.clear();
-        pricecontroller.clear();
-        locationcontroller.clear();
-        detailcontroller.clear();
-        _imageUrlController.clear();
-        selectedImage = null;
-        _imageUrlFromDialog = null;
-        value = null;
-        selectDate = null;
-        selectTime = null;
-      });
+      Navigator.of(context).pop(); // Go back to the manage events page
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.red,
-          content: Text('Upload Failed. Error: ${e.toString()}'),
+          content: Text('Update Failed. Error: ${e.toString()}'),
         ),
       );
     } finally {
@@ -218,7 +220,7 @@ class _UploadEventState extends State<UploadEvent> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Upload Event"),
+        title: const Text("Edit Event"),
         centerTitle: true,
         backgroundColor: const Color(0xfff0f2ff),
         elevation: 0,
@@ -236,10 +238,8 @@ class _UploadEventState extends State<UploadEvent> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- Image Preview Section ---
               _buildImagePreview(),
               const SizedBox(height: 16.0),
-              // --- Image Option Buttons ---
               Row(
                 children: [
                   Expanded(child: _buildOptionButton(
@@ -250,7 +250,6 @@ class _UploadEventState extends State<UploadEvent> {
                 ],
               ),
               const SizedBox(height: 24.0),
-              // --- Form Fields ---
               _buildDropdown(),
               const SizedBox(height: 16.0),
               _buildTextField(controller: namecontroller, hint: "Event Name"),
@@ -263,8 +262,7 @@ class _UploadEventState extends State<UploadEvent> {
               const SizedBox(height: 16.0),
               _buildTextField(controller: detailcontroller, hint: "Details", maxLines: 5),
               const SizedBox(height: 32.0),
-              // --- Upload Button ---
-              _buildUploadButton(),
+              _buildUpdateButton(),
             ],
           ),
         ),
@@ -272,8 +270,7 @@ class _UploadEventState extends State<UploadEvent> {
     );
   }
 
-  // --- Helper Widgets for UI ---
-
+  // Helper Widgets
   Widget _buildImagePreview() {
     Widget content;
     if (selectedImage != null) {
@@ -281,11 +278,11 @@ class _UploadEventState extends State<UploadEvent> {
         borderRadius: BorderRadius.circular(15.0),
         child: Image.file(selectedImage!, fit: BoxFit.cover),
       );
-    } else if (_imageUrlFromDialog != null && _imageUrlFromDialog!.isNotEmpty) {
+    } else if (currentImageUrl != null && currentImageUrl!.isNotEmpty) {
       content = ClipRRect(
         borderRadius: BorderRadius.circular(15.0),
         child: Image.network(
-          _imageUrlFromDialog!,
+          currentImageUrl!,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) => const Center(
             child: Icon(Icons.error_outline, color: Colors.redAccent, size: 50),
@@ -314,7 +311,7 @@ class _UploadEventState extends State<UploadEvent> {
       icon: Icon(icon, size: 20),
       label: Text(text),
       style: ElevatedButton.styleFrom(
-        foregroundColor: Colors.blue.shade800, 
+        foregroundColor: Colors.blue.shade800,
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
         padding: const EdgeInsets.symmetric(vertical: 12.0),
@@ -374,13 +371,18 @@ class _UploadEventState extends State<UploadEvent> {
       children: [
         Expanded(
           child: GestureDetector(
-            onTap: _pickDate,
+            onTap: () async {
+              final pickedDate = await showDatePicker(
+                context: context,
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+                initialDate: selectDate ?? DateTime.now(),
+              );
+              if (pickedDate != null) setState(() => selectDate = pickedDate);
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12.0),
-              ),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12.0)),
               child: Text(
                 selectDate == null ? "Select Date" : DateFormat('yyyy-MM-dd').format(selectDate!),
                 style: TextStyle(fontSize: 16, color: selectDate == null ? Colors.grey.shade600 : Colors.black),
@@ -391,13 +393,16 @@ class _UploadEventState extends State<UploadEvent> {
         const SizedBox(width: 10),
         Expanded(
           child: GestureDetector(
-            onTap: _pickTime,
+            onTap: () async {
+              final pickedTime = await showTimePicker(
+                context: context,
+                initialTime: selectTime ?? TimeOfDay.now(),
+              );
+              if (pickedTime != null) setState(() => selectTime = pickedTime);
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12.0),
-              ),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12.0)),
               child: Text(
                 selectTime == null ? "Select Time" : selectTime!.format(context),
                 style: TextStyle(fontSize: 16, color: selectTime == null ? Colors.grey.shade600 : Colors.black),
@@ -409,14 +414,14 @@ class _UploadEventState extends State<UploadEvent> {
     );
   }
 
-  Widget _buildUploadButton() {
+  Widget _buildUpdateButton() {
     return GestureDetector(
-      onTap: _isLoading ? null : uploadEventData,
+      onTap: _isLoading ? null : updateEventData,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 18.0),
         decoration: BoxDecoration(
-          color: Colors.blue.shade700,
+          color: Colors.green.shade600,
           borderRadius: BorderRadius.circular(15.0),
         ),
         child: Center(
@@ -427,15 +432,12 @@ class _UploadEventState extends State<UploadEvent> {
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
                 )
               : const Text(
-                  "Upload Event",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20.0,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  "Update Event",
+                  style: TextStyle(color: Colors.white, fontSize: 20.0, fontWeight: FontWeight.bold),
                 ),
         ),
       ),
     );
   }
 }
+

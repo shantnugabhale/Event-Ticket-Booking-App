@@ -1,7 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:event_app/pages/detail_page.dart';
 import 'package:event_app/services/database.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; 
 import 'package:intl/intl.dart';
 
 class AllEventsPage extends StatelessWidget {
@@ -58,6 +59,9 @@ class AllEventsPage extends StatelessWidget {
             }
 
             return ListView.builder(
+              // --- ADD THIS LINE ---
+              cacheExtent: 9999,
+              // ---------------------
               padding: EdgeInsets.all(20.0),
               itemCount: allDocs.length,
               itemBuilder: (context, index) {
@@ -75,7 +79,7 @@ class AllEventsPage extends StatelessWidget {
   Widget _buildEventCard(DocumentSnapshot ds, BuildContext context) {
     String formattedDate =
         DateFormat('MMM dd').format(DateTime.parse(ds["Date"]));
-    
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -112,18 +116,25 @@ class AllEventsPage extends StatelessWidget {
                 ClipRRect(
                   borderRadius:
                       BorderRadius.vertical(top: Radius.circular(15.0)),
-                  child: Image.network(
-                    ds["Image"],
+                  // --- START CHANGE ---
+                  child: CachedNetworkImage(
+                    imageUrl: ds["Image"],
                     height: 180,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Image.asset(
+                    placeholder: (context, url) => Container(
+                      height: 180,
+                      width: double.infinity,
+                      color: Colors.grey[300],
+                    ),
+                    errorWidget: (context, url, error) => Image.asset(
                       "assets/images/event.jpg",
                       height: 180,
                       width: double.infinity,
                       fit: BoxFit.cover,
                     ),
                   ),
+                  // --- END CHANGE ---
                 ),
                 Positioned(
                   top: 12,

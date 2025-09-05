@@ -1,5 +1,5 @@
 import 'dart:convert';
-
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:event_app/services/data.dart';
 import 'package:event_app/services/database.dart';
 import 'package:event_app/services/shared_pref.dart';
@@ -26,8 +26,7 @@ class DetailPage extends StatefulWidget {
 class _DetailPageState extends State<DetailPage> {
   int ticket = 1;
 
-
-  String? name ,image , id ;
+  String? name, image, id;
 
   @override
   void initState() {
@@ -35,262 +34,279 @@ class _DetailPageState extends State<DetailPage> {
     ontheload();
   }
 
-  ontheload() async{
+  ontheload() async {
     name = await SharedPrefenceHelper().getUserName();
     image = await SharedPrefenceHelper().getUserImage();
     id = await SharedPrefenceHelper().getUserID();
-
-    setState(() {
-      
-    });
-
+    if (mounted) {
+      setState(() {});
+    }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
-        child: Container(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                children: [
-                  Image.asset(
-                    "assets/images/event.jpg",
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                // --- START IMAGE FIX ---
+                CachedNetworkImage(
+                  imageUrl: widget.image,
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height / 2.2,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[300],
+                    width: MediaQuery.of(context).size.width,
+                    height: MediaQuery.of(context).size.height / 2.2,
+                  ),
+                  errorWidget: (context, url, error) => Image.asset(
+                    "assets/images/event.jpg", // Fallback image
                     width: MediaQuery.of(context).size.width,
                     height: MediaQuery.of(context).size.height / 2.2,
                     fit: BoxFit.cover,
                   ),
-                  Container(
-                    width: MediaQuery.of(context).size.width,
-                    height: MediaQuery.of(context).size.height / 2.2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                ),
+                // --- END IMAGE FIX ---
+                SizedBox(
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height / 2.2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          margin: const EdgeInsets.only(left: 20.0, top: 40.0),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_ios_new_outlined,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.only(left: 10.0, right: 10.0, top: 8.0, bottom: 8.0),
+                        width: MediaQuery.of(context).size.width,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black87,
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22.0,
+                                fontWeight: FontWeight.bold,
+                                shadows: [Shadow(blurRadius: 10.0, color: Colors.black)],
+                              ),
+                            ),
+                            const SizedBox(height: 5.0),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.calendar_month,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  widget.date,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14.0,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const Spacer(),
+                                const Icon(
+                                  Icons.location_on_outlined,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 5),
+                                Flexible(
+                                  child: Text(
+                                    widget.location,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14.0,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20.0),
+            const Padding(
+              padding: EdgeInsets.only(left: 20.0),
+              child: Text(
+                "About Event",
+                style: TextStyle(
+                  color: Color.fromARGB(255, 5, 2, 2),
+                  fontSize: 25.0,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10.0),
+            Padding(
+              padding: const EdgeInsets.only(left: 20.0, right: 20.0),
+              child: Text(
+                widget.detail,
+                style: const TextStyle(
+                  color: Color.fromARGB(148, 0, 0, 0),
+                  fontSize: 14.0,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(height: 50),
+            Row(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(left: 20.0),
+                  child: Text(
+                    "Number of Tickets ",
+                    style: TextStyle(
+                      color: Color.fromARGB(255, 5, 2, 2),
+                      fontSize: 18.0,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(width: 1, color: Colors.black),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  width: 110,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 10, right: 10),
+                    child: Row(
                       children: [
                         GestureDetector(
                           onTap: () {
-                            Navigator.pop(context);
+                            if (ticket > 1) {
+                              setState(() {
+                                ticket = ticket - 1;
+                              });
+                            }
                           },
-                          child: Container(
-                            padding: EdgeInsets.all(5),
-                            margin: EdgeInsets.only(left: 20.0, top: 40.0),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: Icon(
-                              Icons.arrow_back_ios_new_outlined,
-                              color: Colors.black,
+                          child: const Text(
+                            "-",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 24,
                             ),
                           ),
                         ),
-
-                        Container(
-                          padding: EdgeInsets.only(left: 10.0),
-                          width: MediaQuery.of(context).size.width,
-                          decoration: BoxDecoration(color: Colors.black45),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.name,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18.0,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              SizedBox(height: 1.0),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.calendar_month,
-                                    color: const Color.fromARGB(
-                                      210,
-                                      255,
-                                      255,
-                                      255,
-                                    ),
-                                    size: 20,
-                                  ),
-                                  Text(
-                                    widget.date,
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 14.0,
-                                    ),
-                                  ),
-                                  Spacer(),
-                                  Icon(
-                                    Icons.location_on_outlined,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 20.0),
-                                    child: Text(
-                                      widget.location,
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 14.0,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 20.0),
-                            ],
+                        const Spacer(),
+                        Text(
+                          ticket.toString(),
+                          style: const TextStyle(
+                            color: Color.fromARGB(255, 0, 135, 246),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 24,
+                          ),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () {
+                            if (ticket < 10) {
+                              setState(() {
+                                ticket = ticket + 1;
+                              });
+                            }
+                          },
+                          child: const Text(
+                            "+",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 24,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-              SizedBox(height: 20.0),
-              Padding(
-                padding: const EdgeInsets.only(left: 20.0),
-                child: Text(
-                  "About Event",
-                  style: TextStyle(
-                    color: const Color.fromARGB(255, 5, 2, 2),
-                    fontSize: 25.0,
-                    fontWeight: FontWeight.bold,
-                  ),
                 ),
-              ),
-              SizedBox(height: 10.0),
-              Padding(
-                padding: const EdgeInsets.only(left: 20.0, right: 20.0),
-                child: Text(
-                  widget.detail,
-                  style: TextStyle(
-                    color: const Color.fromARGB(148, 0, 0, 0),
-                    fontSize: 14.0,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              SizedBox(height: 50),
-              Row(
+              ],
+            ),
+            const SizedBox(height: 30.0),
+            Padding(
+              padding: const EdgeInsets.only(left: 20.0, right: 20.0),
+              child: Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 20.0),
-                    child: Text(
-                      "Number of Tickets ",
-                      style: TextStyle(
-                        color: const Color.fromARGB(255, 5, 2, 2),
-                        fontSize: 18.0,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  Text(
+                    "Amount : \$${(int.parse(widget.price) * ticket).toString()}",
+                    style: const TextStyle(
+                      color: Color.fromARGB(255, 102, 47, 231),
+                      fontSize: 18.0,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(width: 20),
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(width: 1, color: Colors.black),
-                      borderRadius: BorderRadius.circular(8),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: () {
+                      makepayment(
+                        (int.parse(widget.price) * ticket).toString(),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    width: 110,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 10, right: 10),
-                      child: Row(
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              if (ticket > 1) {
-                                ticket = ticket - 1;
-                                setState(() {});
-                              }
-                            },
-                            child: Text(
-                              "-",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 24,
-                              ),
-                            ),
-                          ),
-                          Spacer(),
-                          Text(
-                            ticket.toString(),
-                            style: TextStyle(
-                              color: const Color.fromARGB(255, 0, 135, 246),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 24,
-                            ),
-                          ),
-                          Spacer(),
-                          GestureDetector(
-                            onTap: () {
-                              if (ticket < 10) {
-                                ticket = ticket + 1;
-                                setState(() {});
-                              }
-                            },
-                            child: Text(
-                              "+",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 24,
-                              ),
-                            ),
-                          ),
-                        ],
+                    child: const Padding(
+                      padding: EdgeInsets.only(
+                        left: 5,
+                        right: 5,
+                        top: 10,
+                        bottom: 10,
+                      ),
+                      child: Text(
+                        "Book Now",
+                        style: TextStyle(color: Colors.white, fontSize: 16),
                       ),
                     ),
                   ),
                 ],
               ),
-
-              SizedBox(height: 30.0),
-
-              Padding(
-                padding: const EdgeInsets.only(left: 20.0, right: 20.0),
-                child: Row(
-                  children: [
-                    Text(
-                      "Amount : \$${(int.parse(widget.price) * ticket).toString()}",
-                      style: TextStyle(
-                        color: const Color.fromARGB(255, 102, 47, 231),
-                        fontSize: 18.0,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Spacer(),
-                    ElevatedButton(
-                      onPressed: () {
-                        makepayment(
-                          (int.parse(widget.price) * ticket).toString(),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.only(
-                          left: 5,
-                          right: 5,
-                          top: 10,
-                          bottom: 10,
-                        ),
-                        child: Text(
-                          "Book Now",
-                          style: TextStyle(color: Colors.white, fontSize: 16),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 10),
-            ],
-          ),
+            ),
+            const SizedBox(height: 10),
+          ],
         ),
       ),
     );
@@ -319,52 +335,50 @@ class _DetailPageState extends State<DetailPage> {
 
   void displayPaymentSheet(String amount) async {
     try {
-      await Stripe.instance
-          .presentPaymentSheet()
-          .then((value) async {
-            final int total = int.parse(widget.price) * ticket;
-            Map<String, dynamic> Bookingdetail = {
-              "Number" : ticket.toString(),
-              "Total" : total.toString(),
-              "Event" : widget.name,
-              "Location" : widget.location,
-              "Date" : widget.date,
-              "Name" : name,
-              "Image" :image,
-              "EventImage" : widget.image
-            };
-           
-          if(id != null){
-            await DatabaseMethods().addUserBooking(Bookingdetail,id!).then((value) async {
-              await DatabaseMethods().addAdminTickets(Bookingdetail, id!);
-            });
-          }
-            showDialog(
-              context: context,
-              builder: (_) => AlertDialog(
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
+      await Stripe.instance.presentPaymentSheet().then((value) async {
+        final int total = int.parse(widget.price) * ticket;
+        Map<String, dynamic> bookingDetail = {
+          "Number": ticket.toString(),
+          "Total": total.toString(),
+          "Event": widget.name,
+          "Location": widget.location,
+          "Date": widget.date,
+          "Name": name,
+          "Image": image,
+          "EventImage": widget.image
+        };
+
+        if (id != null) {
+          await DatabaseMethods().addUserBooking(bookingDetail, id!).then((value) async {
+            await DatabaseMethods().addAdminTickets(bookingDetail, id!);
+          });
+        }
+        showDialog(
+          context: context,
+          builder: (_) => const AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.green),
-                        Text("Payment Successfull"),
-                      ],
-                    ),
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 10),
+                    Text("Payment Successful"),
                   ],
                 ),
-              ),
-            );
-            paymentIntent = null;
-          })
-          .onError((error, StackTrace) {
-            print("Error is :--> $error $StackTrace");
-          });
+              ],
+            ),
+          ),
+        );
+        paymentIntent = null;
+      }).onError((error, StackTrace) {
+        print("Error is :--> $error $StackTrace");
+      });
     } on StripeException catch (e) {
       print("Error is --> $e");
       showDialog(
         context: context,
-        builder: (_) => AlertDialog(content: Text("Cancelled")),
+        builder: (_) => const AlertDialog(content: Text("Cancelled")),
       );
     } catch (e) {
       print('$e');

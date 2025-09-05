@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:event_app/services/database.dart';
 import 'package:event_app/services/shared_pref.dart';
@@ -47,6 +48,9 @@ class _BookingState extends State<Booking> {
           return Center(child: Text('No bookings found'));
         }
         return ListView.builder(
+          // --- THIS IS THE FINAL FIX ---
+          cacheExtent: 9999,
+          // --------------------------------
           padding: EdgeInsets.zero,
           itemCount: snapshot.data.docs.length,
           itemBuilder: (context, index) {
@@ -64,10 +68,10 @@ class _BookingState extends State<Booking> {
                       child: Column(
                         children: [
                           SizedBox(height: 10),
-                                                      Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                          Row(
+                              mainAxisAlignment: MainAxisAlignment.start,
                               children: [
-                                Spacer(),
+                               
                                 Icon(
                                   Icons.location_on_outlined,
                                   color: Colors.blue,
@@ -97,15 +101,25 @@ class _BookingState extends State<Booking> {
                             child: Row(
                               children: [
                                 ClipRRect(
-                                  borderRadius: BorderRadiusGeometry.circular(20),
-                                  child: Image.asset(
-                                    "assets/images/event.jpg",
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: CachedNetworkImage(
+                                    imageUrl: ds["EventImage"] ?? '',
                                     height: 120,
                                     width: 120,
                                     fit: BoxFit.cover,
+                                    placeholder: (context, url) => Container(
+                                      height: 120,
+                                      width: 120,
+                                      color: Colors.grey[200],
+                                    ),
+                                    errorWidget: (context, url, error) => Image.asset(
+                                      "assets/images/event.jpg",
+                                      height: 120,
+                                      width: 120,
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                                 ),
-          
                                 SizedBox(width: 10.0),
                                 Expanded(
                                   child: Column(
@@ -194,9 +208,7 @@ class _BookingState extends State<Booking> {
       body: Container(
         width: MediaQuery.of(context).size.width,
         padding: EdgeInsets.only(
-          // left: 20.0,
           top: 50.0,
-          // right: 20.0,
           bottom: 10.0,
         ),
         decoration: BoxDecoration(
@@ -228,7 +240,7 @@ class _BookingState extends State<Booking> {
                 ),
                 child: Column(
                   children: [
-                    SizedBox(height: 20.0), 
+                    SizedBox(height: 20.0),
                     Expanded(child: allbookings()),
                   ],
                 ),

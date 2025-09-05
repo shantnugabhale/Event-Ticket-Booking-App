@@ -4,7 +4,7 @@ import 'package:event_app/pages/signup.dart';
 import 'package:flutter/material.dart';
 
 class SubadminDashboard extends StatelessWidget {
-  const SubadminDashboard({super.key});
+  const SubadminDashboard({super.key, required String docId});
 
   @override
   Widget build(BuildContext context) {
